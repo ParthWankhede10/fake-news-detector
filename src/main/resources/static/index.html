@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fake News Detector</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', sans-serif; background: #0f0f0f; color: #f0f0f0; min-height: 100vh; }
+        .nav { background: #1a1a1a; border-bottom: 1px solid #2a2a2a; padding: 1rem 2rem; display: flex; justify-content: space-between; align-items: center; }
+        .nav h1 { font-size: 1.2rem; color: #4ade80; }
+        .nav-right { display: flex; gap: 1rem; align-items: center; }
+        .nav-right span { font-size: 0.85rem; color: #888; }
+        .btn-logout { background: transparent; border: 1px solid #333; color: #888; padding: 0.4rem 1rem; border-radius: 6px; cursor: pointer; font-size: 0.85rem; }
+        .btn-logout:hover { border-color: #e74c3c; color: #e74c3c; }
+        .container { max-width: 800px; margin: 0 auto; padding: 2rem; }
+        .card { background: #1a1a1a; border: 1px solid #2a2a2a; border-radius: 12px; padding: 2rem; margin-bottom: 1.5rem; }
+        .card h2 { font-size: 1rem; color: #888; margin-bottom: 1rem; text-transform: uppercase; letter-spacing: 0.05em; }
+        textarea { width: 100%; background: #0f0f0f; border: 1px solid #2a2a2a; border-radius: 8px; padding: 1rem; color: #f0f0f0; font-size: 0.95rem; resize: vertical; min-height: 140px; font-family: inherit; }
+        textarea:focus { outline: none; border-color: #4ade80; }
+        .btn-analyze { width: 100%; background: #4ade80; color: #0f0f0f; border: none; padding: 0.9rem; border-radius: 8px; font-size: 1rem; font-weight: 600; cursor: pointer; margin-top: 1rem; }
+        .btn-analyze:hover { background: #22c55e; }
+        .btn-analyze:disabled { background: #2a2a2a; color: #555; cursor: not-allowed; }
+        .verdict-box { border-radius: 10px; padding: 1.5rem; margin-bottom: 1rem; }
+        .verdict-FAKE { background: #2d1111; border: 1px solid #7f1d1d; }
+        .verdict-REAL { background: #0f2d1a; border: 1px solid #14532d; }
+        .verdict-UNCERTAIN { background: #2d2411; border: 1px solid #78350f; }
+        .verdict-label { font-size: 2rem; font-weight: 700; }
+        .verdict-FAKE .verdict-label { color: #f87171; }
+        .verdict-REAL .verdict-label { color: #4ade80; }
+        .verdict-UNCERTAIN .verdict-label { color: #fbbf24; }
+        .confidence { font-size: 0.9rem; color: #888; margin-top: 0.3rem; }
+        .summary { font-size: 0.95rem; color: #ccc; margin-top: 0.8rem; line-height: 1.6; }
+        .claims-list { list-style: none; display: flex; flex-direction: column; gap: 0.8rem; }
+        .claim-item { background: #0f0f0f; border: 1px solid #2a2a2a; border-radius: 8px; padding: 1rem; }
+        .claim-text { font-size: 0.9rem; color: #ccc; margin-bottom: 0.5rem; }
+        .claim-rating { display: inline-block; font-size: 0.75rem; font-weight: 600; padding: 0.2rem 0.6rem; border-radius: 4px; }
+        .rating-FALSE { background: #7f1d1d; color: #fca5a5; }
+        .rating-TRUE { background: #14532d; color: #86efac; }
+        .rating-MISLEADING { background: #78350f; color: #fcd34d; }
+        .rating-UNVERIFIED { background: #1e3a5f; color: #93c5fd; }
+        .claim-explanation { font-size: 0.82rem; color: #666; margin-top: 0.4rem; }
+        .claim-source { font-size: 0.78rem; color: #555; margin-top: 0.3rem; }
+        .hidden { display: none; }
+        .loading { text-align: center; padding: 2rem; color: #4ade80; }
+        .spinner { display: inline-block; width: 24px; height: 24px; border: 2px solid #333; border-top-color: #4ade80; border-radius: 50%; animation: spin 0.8s linear infinite; margin-bottom: 0.5rem; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .error-box { background: #2d1111; border: 1px solid #7f1d1d; border-radius: 8px; padding: 1rem; color: #f87171; font-size: 0.9rem; }
+        .auth-container { max-width: 420px; margin: 5rem auto; padding: 2rem; }
+        .auth-title { text-align: center; margin-bottom: 2rem; }
+        .auth-title h1 { font-size: 1.8rem; color: #4ade80; }
+        .auth-title p { color: #666; font-size: 0.9rem; margin-top: 0.5rem; }
+        .form-group { margin-bottom: 1rem; }
+        .form-group label { display: block; font-size: 0.85rem; color: #888; margin-bottom: 0.4rem; }
+        .form-group input { width: 100%; background: #0f0f0f; border: 1px solid #2a2a2a; border-radius: 8px; padding: 0.75rem 1rem; color: #f0f0f0; font-size: 0.95rem; }
+        .form-group input:focus { outline: none; border-color: #4ade80; }
+        .btn-auth { width: 100%; background: #4ade80; color: #0f0f0f; border: none; padding: 0.85rem; border-radius: 8px; font-size: 1rem; font-weight: 600; cursor: pointer; margin-top: 0.5rem; }
+        .btn-auth:hover { background: #22c55e; }
+        .auth-switch { text-align: center; margin-top: 1rem; font-size: 0.875rem; color: #666; }
+        .auth-switch a { color: #4ade80; cursor: pointer; text-decoration: none; }
+        .history-item { background: #0f0f0f; border: 1px solid #2a2a2a; border-radius: 8px; padding: 1rem; display: flex; justify-content: space-between; align-items: center; }
+        .history-verdict { font-weight: 600; font-size: 0.9rem; }
+        .history-date { font-size: 0.78rem; color: #555; }
+        .history-list { display: flex; flex-direction: column; gap: 0.6rem; }
+        .tab-bar { display: flex; gap: 0.5rem; margin-bottom: 1.5rem; }
+        .tab { background: transparent; border: 1px solid #2a2a2a; color: #888; padding: 0.5rem 1.2rem; border-radius: 6px; cursor: pointer; font-size: 0.9rem; }
+        .tab.active { background: #4ade80; color: #0f0f0f; border-color: #4ade80; font-weight: 600; }
+    </style>
+</head>
+<body>
+
+<div id="auth-page">
+    <div class="auth-container">
+        <div class="auth-title">
+            <h1>🔍 FakeCheck</h1>
+            <p>AI-powered news credibility analyzer</p>
+        </div>
+        <div class="card">
+            <div id="login-form">
+                <h2>Login</h2>
+                <div class="form-group">
+                    <label>Email</label>
+                    <input type="email" id="login-email" placeholder="you@example.com" />
+                </div>
+                <div class="form-group">
+                    <label>Password</label>
+                    <input type="password" id="login-password" placeholder="••••••" />
+                </div>
+                <div id="login-error" class="error-box hidden"></div>
+                <button class="btn-auth" onclick="login()">Login</button>
+                <div class="auth-switch">Don't have an account? <a onclick="showRegister()">Register</a></div>
+            </div>
+
+            <div id="register-form" class="hidden">
+                <h2>Register</h2>
+                <div class="form-group">
+                    <label>Name</label>
+                    <input type="text" id="reg-name" placeholder="Your name" />
+                </div>
+                <div class="form-group">
+                    <label>Email</label>
+                    <input type="email" id="reg-email" placeholder="you@example.com" />
+                </div>
+                <div class="form-group">
+                    <label>Password</label>
+                    <input type="password" id="reg-password" placeholder="Min 6 characters" />
+                </div>
+                <div id="reg-error" class="error-box hidden"></div>
+                <button class="btn-auth" onclick="register()">Create Account</button>
+                <div class="auth-switch">Already have an account? <a onclick="showLogin()">Login</a></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="app-page" class="hidden">
+    <div class="nav">
+        <h1>🔍 FakeCheck</h1>
+        <div class="nav-right">
+            <span id="user-name"></span>
+            <button class="btn-logout" onclick="logout()">Logout</button>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="tab-bar">
+            <button class="tab active" onclick="showTab('analyze')">Analyze</button>
+            <button class="tab" onclick="showTab('history')">History</button>
+        </div>
+
+        <div id="tab-analyze">
+            <div class="card">
+                <h2>Paste Article or News Content</h2>
+                <textarea id="article-input" placeholder="Paste the news article or claim you want to fact-check..."></textarea>
+                <button class="btn-analyze" id="analyze-btn" onclick="analyze()">Analyze Now</button>
+            </div>
+
+            <div id="loading" class="card hidden">
+                <div class="loading">
+                    <div class="spinner"></div>
+                    <p>Analyzing with AI + Fact Check APIs...</p>
+                </div>
+            </div>
+
+            <div id="result" class="hidden">
+                <div class="card">
+                    <h2>Verdict</h2>
+                    <div id="verdict-box" class="verdict-box">
+                        <div class="verdict-label" id="verdict-label"></div>
+                        <div class="confidence" id="confidence-text"></div>
+                        <div class="summary" id="summary-text"></div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <h2>Claim Breakdown</h2>
+                    <ul class="claims-list" id="claims-list"></ul>
+                </div>
+            </div>
+
+            <div id="analyze-error" class="error-box hidden"></div>
+        </div>
+
+        <div id="tab-history" class="hidden">
+            <div class="card">
+                <h2>Your Analysis History</h2>
+                <div id="history-list" class="history-list">
+                    <p style="color: #555; font-size: 0.9rem;">Loading history...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    const API = 'http://localhost:8080';
+    let token = localStorage.getItem('token');
+    let userName = localStorage.getItem('userName');
+
+    if (token) showApp();
+
+    function showApp() {
+      document.getElementById('auth-page').classList.add('hidden');
+      document.getElementById('app-page').classList.remove('hidden');
+      document.getElementById('user-name').textContent = userName || '';
+    }
+
+    function showRegister() {
+      document.getElementById('login-form').classList.add('hidden');
+      document.getElementById('register-form').classList.remove('hidden');
+    }
+
+    function showLogin() {
+      document.getElementById('register-form').classList.add('hidden');
+      document.getElementById('login-form').classList.remove('hidden');
+    }
+
+    function showTab(tab) {
+      document.getElementById('tab-analyze').classList.add('hidden');
+      document.getElementById('tab-history').classList.add('hidden');
+      document.getElementById('tab-' + tab).classList.remove('hidden');
+      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      event.target.classList.add('active');
+      if (tab === 'history') loadHistory();
+    }
+
+    async function login() {
+      const email = document.getElementById('login-email').value;
+      const password = document.getElementById('login-password').value;
+      const errBox = document.getElementById('login-error');
+      errBox.classList.add('hidden');
+      try {
+        const res = await fetch(`${API}/api/auth/login`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, password })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.message || 'Login failed');
+        token = data.token;
+        userName = data.name;
+        localStorage.setItem('token', token);
+        localStorage.setItem('userName', userName);
+        showApp();
+      } catch (e) {
+        errBox.textContent = e.message;
+        errBox.classList.remove('hidden');
+      }
+    }
+
+    async function register() {
+      const name = document.getElementById('reg-name').value;
+      const email = document.getElementById('reg-email').value;
+      const password = document.getElementById('reg-password').value;
+      const errBox = document.getElementById('reg-error');
+      errBox.classList.add('hidden');
+      try {
+        const res = await fetch(`${API}/api/auth/register`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name, email, password })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.message || 'Registration failed');
+        token = data.token;
+        userName = data.name;
+        localStorage.setItem('token', token);
+        localStorage.setItem('userName', userName);
+        showApp();
+      } catch (e) {
+        errBox.textContent = e.message;
+        errBox.classList.remove('hidden');
+      }
+    }
+
+    function logout() {
+      localStorage.removeItem('token');
+      localStorage.removeItem('userName');
+      token = null;
+      document.getElementById('app-page').classList.add('hidden');
+      document.getElementById('auth-page').classList.remove('hidden');
+    }
+
+    async function analyze() {
+      const content = document.getElementById('article-input').value.trim();
+      if (!content) return;
+      const errBox = document.getElementById('analyze-error');
+      errBox.classList.add('hidden');
+      document.getElementById('result').classList.add('hidden');
+      document.getElementById('loading').classList.remove('hidden');
+      document.getElementById('analyze-btn').disabled = true;
+      try {
+        const res = await fetch(`${API}/api/analysis/analyze`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+          body: JSON.stringify({ content })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.message || 'Analysis failed');
+        showResult(data);
+      } catch (e) {
+        errBox.textContent = e.message;
+        errBox.classList.remove('hidden');
+      } finally {
+        document.getElementById('loading').classList.add('hidden');
+        document.getElementById('analyze-btn').disabled = false;
+      }
+    }
+
+    function showResult(data) {
+      const verdictBox = document.getElementById('verdict-box');
+      verdictBox.className = 'verdict-box verdict-' + data.verdict;
+      document.getElementById('verdict-label').textContent = data.verdict;
+      document.getElementById('confidence-text').textContent = `Confidence: ${data.confidenceScore}%`;
+      document.getElementById('summary-text').textContent = data.summary || '';
+      const claimsList = document.getElementById('claims-list');
+      claimsList.innerHTML = '';
+      (data.claims || []).forEach(claim => {
+        const li = document.createElement('li');
+        li.className = 'claim-item';
+        li.innerHTML = `
+          <div class="claim-text">${claim.claim}</div>
+          <span class="claim-rating rating-${claim.rating}">${claim.rating}</span>
+          <div class="claim-explanation">${claim.explanation || ''}</div>
+          <div class="claim-source">Source: ${claim.source || 'AI Analysis'}</div>
+        `;
+        claimsList.appendChild(li);
+      });
+      document.getElementById('result').classList.remove('hidden');
+    }
+
+    async function loadHistory() {
+      const list = document.getElementById('history-list');
+      list.innerHTML = '<p style="color: #555; font-size: 0.9rem;">Loading...</p>';
+      try {
+        const res = await fetch(`${API}/api/analysis/history?page=0&size=10`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const data = await res.json();
+        const items = data.content || [];
+        if (items.length === 0) {
+          list.innerHTML = '<p style="color: #555; font-size: 0.9rem;">No history yet.</p>';
+          return;
+        }
+        list.innerHTML = '';
+        items.forEach(item => {
+          const div = document.createElement('div');
+          div.className = 'history-item';
+          const color = item.verdict === 'FAKE' ? '#f87171' : item.verdict === 'REAL' ? '#4ade80' : '#fbbf24';
+          div.innerHTML = `
+            <div>
+              <div class="history-verdict" style="color: ${color}">${item.verdict}</div>
+              <div style="font-size: 0.8rem; color: #555; margin-top: 2px;">Score: ${item.confidenceScore}%</div>
+            </div>
+            <div class="history-date">${new Date(item.createdAt).toLocaleDateString()}</div>
+          `;
+          list.appendChild(div);
+        });
+      } catch (e) {
+        list.innerHTML = '<p style="color: #f87171; font-size: 0.9rem;">Failed to load history.</p>';
+      }
+    }
+</script>
+</body>
+</html>
