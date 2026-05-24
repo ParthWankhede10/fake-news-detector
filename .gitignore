@@ -33,4 +33,3 @@ build/
 .vscode/
 
 ### Sensitive ###
-src/main/resources/application.yml
