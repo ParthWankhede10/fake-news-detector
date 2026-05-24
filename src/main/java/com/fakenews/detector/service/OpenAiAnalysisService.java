@@ -5,8 +5,10 @@ import com.fakenews.detector.dto.response.ClaimResponse;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestClient;
+import org.springframework.http.MediaType;
 
 import java.util.List;
 import java.util.Map;
@@ -16,47 +18,67 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class OpenAiAnalysisService {
 
-    private final ChatClient.Builder chatClientBuilder;
+    @Value("${spring.ai.openai.api-key}")
+    private String apiKey;
+
     private final ObjectMapper objectMapper;
 
     public AnalysisResponse analyzeArticle(String content) {
-        ChatClient chatClient = chatClientBuilder.build();
-
         String prompt = """
-            You are a professional fact-checker and misinformation analyst.
-            
-            Analyze the following news article or content for credibility and misinformation.
-            
-            Return your response in this EXACT JSON format with no extra text:
-            {
-              "verdict": "REAL or FAKE or UNCERTAIN",
-              "confidenceScore": 75,
-              "summary": "2-3 sentence overall assessment",
-              "claims": [
+                You are a professional fact-checker. Analyze this news for credibility.
+                Return ONLY this JSON, no extra text:
                 {
-                  "claim": "specific claim from the article",
-                  "rating": "TRUE or FALSE or UNVERIFIED or MISLEADING",
-                  "source": "AI Analysis",
-                  "explanation": "why this claim is rated this way"
+                  "verdict": "REAL or FAKE or UNCERTAIN",
+                  "confidenceScore": 75,
+                  "summary": "2-3 sentence assessment",
+                  "claims": [
+                    {
+                      "claim": "specific claim",
+                      "rating": "TRUE or FALSE or UNVERIFIED or MISLEADING",
+                      "source": "AI Analysis",
+                      "explanation": "reason"
+                    }
+                  ]
                 }
-              ]
-            }
-            
-            Article to analyze:
-            %s
-            """.formatted(content);
+                Article: %s
+                """.formatted(content);
 
         try {
-            String response = chatClient.prompt()
-                    .user(prompt)
-                    .call()
-                    .content();
-            log.info("Gemini response: {}", response);
-            return parseResponse(response);
+            RestClient client = RestClient.create();
+
+            Map<String, Object> requestBody = Map.of(
+                    "contents", List.of(
+                            Map.of("parts", List.of(
+                                    Map.of("text", prompt)
+                            ))
+                    )
+            );
+
+            String url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=" + apiKey;
+
+            Map response = client.post()
+                    .uri(url)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body(requestBody)
+                    .retrieve()
+                    .body(Map.class);
+
+            String text = extractText(response);
+            log.info("Gemini response: {}", text);
+            return parseResponse(text);
+
         } catch (Exception e) {
             log.error("Gemini API error: {}", e.getMessage(), e);
-            throw e;
+            throw new RuntimeException("AI analysis failed: " + e.getMessage());
         }
+    }
+
+    @SuppressWarnings("unchecked")
+    private String extractText(Map response) {
+        List<Map> candidates = (List<Map>) response.get("candidates");
+        Map content = (Map) candidates.get(0).get("content");
+        List<Map> parts = (List<Map>) content.get("parts");
+        return (String) parts.get(0).get("text");
     }
 
     @SuppressWarnings("unchecked")
@@ -91,7 +113,7 @@ public class OpenAiAnalysisService {
                     .build();
 
         } catch (Exception e) {
-            log.error("Failed to parse OpenAI response: {}", e.getMessage());
+            log.error("Failed to parse response: {}", e.getMessage());
             return AnalysisResponse.builder()
                     .verdict("UNCERTAIN")
                     .confidenceScore(0.0)
